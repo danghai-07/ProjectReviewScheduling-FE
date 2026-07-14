@@ -1,0 +1,113 @@
+version: '3.9'
+
+services:
+
+  # ─── SQL Server ─────────────────────────────────────────────────────────────
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: prs-sqlserver
+    environment:
+      SA_PASSWORD: "YourStrong@Passw0rd"
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Express"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - prs-network
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P YourStrong@Passw0rd -Q 'SELECT 1' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # ─── Redis (Message Broker) ─────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: prs-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - prs-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── gRPC Service ───────────────────────────────────────────────────────────
+  grpc-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.GrpcService
+    container_name: prs-grpc
+    ports:
+      - "5200:5200"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=ProjectReviewSchedulingDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;MultipleActiveResultSets=true
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - prs-network
+
+  # ─── REST API ────────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.API
+    container_name: prs-api
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=ProjectReviewSchedulingDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;MultipleActiveResultSets=true
+      - ConnectionStrings__Redis=redis:6379
+      - JwtSettings__SecretKey=THIS_IS_A_DEV_ONLY_SECRET_KEY_REPLACE_IN_PRODUCTION_MIN_32_CHARS
+      - JwtSettings__Issuer=ProjectReviewSchedulingAPI
+      - JwtSettings__Audience=ProjectReviewSchedulingClient
+      - JwtSettings__ExpiryMinutes=1440
+      - GrpcSettings__ReportServiceUrl=http://grpc-service:5200
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      grpc-service:
+        condition: service_started
+    networks:
+      - prs-network
+    restart: on-failure
+
+  # ─── Frontend (Next.js) ──────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./prs-frontend
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=http://localhost:8080
+    container_name: prs-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
+    depends_on:
+      - api
+    networks:
+      - prs-network
+    restart: on-failure
+
+volumes:
+  sqlserver_data:
+  redis_data:
+
+networks:
+  prs-network:
+    driver: bridge
