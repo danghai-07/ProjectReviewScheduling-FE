@@ -4,6 +4,7 @@ import type {
   ReviewRoundDto, CreateReviewRoundPayload, RoundStatus,
   ReviewSlotDto, CreateSlotPayload,
   ScheduleSummaryDto, RoomDto, ReviewReportDto, GrpcRoundReportDto,
+  SubmitFeedbackPayload,
   ApiResponse
 } from '@/types'
 
@@ -65,6 +66,12 @@ export const schedulesApi = {
     api.post<ApiResponse<boolean>>('/api/schedules/reassign-group', {
       reviewScheduleId, groupId, newScheduleId
     }),
+}
+
+// ─── Feedback ──────────────────────────────────────────────────────────────
+export const feedbackApi = {
+  submit: (data: SubmitFeedbackPayload) =>
+    api.post<ApiResponse<boolean>>('/api/feedback', data),
 }
 
 // ─── Rooms ─────────────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import {
   Select, Button, Card, Row, Col, Statistic, Table, Tag, Space,
-  Typography, message, Spin, Popconfirm, Alert, Badge, Modal, Form
+  Typography, message, Spin, Popconfirm, Alert, Badge, Modal, Form, Input
 } from 'antd'
 import {
   ThunderboltOutlined, SendOutlined, CheckCircleOutlined,
@@ -10,7 +10,7 @@ import {
 } from '@ant-design/icons'
 import MainLayout from '@/components/layout/MainLayout'
 import { roundsApi, schedulesApi, roomsApi } from '@/lib/services'
-import { FAP_COLORS } from '@/lib/constants'
+import { FAP_COLORS, UUID_PATTERN } from '@/lib/constants'
 import type { ReviewRoundDto, ScheduleSummaryDto, RoomDto } from '@/types'
 
 const { Title, Text } = Typography
@@ -24,6 +24,8 @@ export default function SchedulesPage() {
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [publishing, setPublishing] = useState(false)
+  const [assigning, setAssigning] = useState(false)
+  const [assignForm] = Form.useForm()
 
   useEffect(() => {
     roundsApi.getAll().then(r => setRounds(r.data.data || []))
@@ -60,6 +62,23 @@ export default function SchedulesPage() {
       }
     } catch { message.error('Failed to publish schedule') }
     finally { setPublishing(false) }
+  }
+
+  // FR-09: Assign a room to a review schedule
+  const handleAssignRoom = async (values: { reviewScheduleId: string; roomId: string }) => {
+    setAssigning(true)
+    try {
+      const res = await schedulesApi.assignRoom(values.reviewScheduleId.trim(), values.roomId)
+      if (res.data.success) {
+        const room = rooms.find(r => r.id === values.roomId)
+        message.success(`Room ${room?.name || ''} assigned to schedule!`)
+        assignForm.resetFields()
+      } else {
+        message.error(res.data.message)
+      }
+    } catch (err: any) {
+      message.error(err.response?.data?.message || 'Failed to assign room')
+    } finally { setAssigning(false) }
   }
 
   return (
@@ -186,6 +205,51 @@ export default function SchedulesPage() {
           </Row>
         </div>
       )}
+
+      {/* FR-09: Assign room to schedule */}
+      <div className="page-card">
+        <Title level={5} style={{ color: FAP_COLORS.primary, marginBottom: 4 }}>
+          <HomeOutlined /> Assign Room to Schedule
+        </Title>
+        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+          Assign a room to a generated review schedule (Moderator only).
+        </Text>
+        <Form form={assignForm} layout="inline" onFinish={handleAssignRoom}>
+          <Form.Item
+            name="reviewScheduleId"
+            rules={[
+              { required: true, message: 'Schedule ID is required' },
+              { pattern: UUID_PATTERN, message: 'Must be a valid UUID' },
+            ]}
+            style={{ flex: 1, minWidth: 320 }}
+          >
+            <Input placeholder="Review Schedule ID (UUID) — e.g. 3fa85f64-5717-4562-b3fc-2c963f66afa6" />
+          </Form.Item>
+          <Form.Item
+            name="roomId"
+            rules={[{ required: true, message: 'Please select a room' }]}
+          >
+            <Select placeholder="Select room..." style={{ width: 200 }}>
+              {rooms.map(room => (
+                <Option key={room.id} value={room.id}>
+                  <Space>
+                    <HomeOutlined style={{ color: FAP_COLORS.primary }} />
+                    <span>{room.name}</span>
+                    {room.capacity && <Tag color="blue" style={{ fontSize: 10 }}>Cap: {room.capacity}</Tag>}
+                  </Space>
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+          <Button
+            type="primary" htmlType="submit"
+            icon={<HomeOutlined />} loading={assigning}
+            style={{ background: FAP_COLORS.primary }}
+          >
+            Assign Room
+          </Button>
+        </Form>
+      </div>
 
       {/* Rooms section */}
       <div className="page-card">

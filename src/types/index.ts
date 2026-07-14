@@ -57,6 +57,12 @@ export interface ScheduleSummaryDto {
   totalScheduled: number; totalGroups: number; unscheduledGroups: number
 }
 
+// ─── Feedback ──────────────────────────────────────────────────────────────
+export interface SubmitFeedbackPayload {
+  reviewScheduleId: string; groupId: string; lecturerId: string
+  comments: string; recommendations: string; evaluationNotes: string
+}
+
 // ─── Room ──────────────────────────────────────────────────────────────────
 export interface RoomDto { id: string; name: string; capacity: number | null }
 
