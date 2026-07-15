@@ -4,7 +4,7 @@ import type {
   ReviewRoundDto, CreateReviewRoundPayload, RoundStatus,
   ReviewSlotDto, CreateSlotPayload,
   ScheduleSummaryDto, RoomDto, ReviewReportDto, GrpcRoundReportDto,
-  SubmitFeedbackPayload,
+  SubmitFeedbackPayload, LecturerWorkloadDto,
   ApiResponse
 } from '@/types'
 
@@ -93,7 +93,7 @@ export const grpcReportsApi = {
     api.get<{ success: boolean; source: string; data: GrpcRoundReportDto }>(
       `/api/grpc-reports/rounds/${reviewRoundId}/report`),
   getWorkload: (reviewRoundId: string) =>
-    api.get<{ success: boolean; source: string; data: any[] }>(
+    api.get<{ success: boolean; source: string; data: LecturerWorkloadDto[] }>(
       `/api/grpc-reports/rounds/${reviewRoundId}/workload`),
   getStatus: (reviewRoundId: string) =>
     api.get<{ success: boolean; source: string; data: any }>(

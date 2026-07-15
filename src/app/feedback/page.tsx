@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import {
-  Form, Input, Button, Card, Typography,
+  Form, Input, Select, Button, Card, Typography,
   message, Alert, Space, Tag, Divider, Row, Col, Popconfirm, Empty
 } from 'antd'
 import {
@@ -9,13 +9,14 @@ import {
   CheckCircleOutlined, ClockCircleOutlined,
 } from '@ant-design/icons'
 import MainLayout from '@/components/layout/MainLayout'
-import { roundsApi, schedulesApi, feedbackApi } from '@/lib/services'
+import { roundsApi, schedulesApi, feedbackApi, grpcReportsApi } from '@/lib/services'
 import { FAP_COLORS, UUID_PATTERN } from '@/lib/constants'
 import { useAuthStore } from '@/stores/authStore'
-import type { ReviewRoundDto } from '@/types'
+import type { ReviewRoundDto, LecturerWorkloadDto } from '@/types'
 import dayjs from 'dayjs'
 
 const { Title, Text } = Typography
+const { Option } = Select
 
 interface SubmittedFeedback {
   reviewScheduleId: string
@@ -31,6 +32,8 @@ export default function FeedbackPage() {
   const [submitting, setSubmitting] = useState(false)
   const [completing, setCompleting] = useState(false)
   const [history, setHistory] = useState<SubmittedFeedback[]>([])
+  const [lecturers, setLecturers] = useState<LecturerWorkloadDto[]>([])
+  const [loadingLecturers, setLoadingLecturers] = useState(false)
 
   const isLecturer = user?.role === 'Lecturer'
 
@@ -42,6 +45,25 @@ export default function FeedbackPage() {
     )
   }, [])
 
+  // The only endpoint that exposes Lecturer.Id is the gRPC workload report, which
+  // lists the lecturers assigned to a round — i.e. exactly those who can review it.
+  const handleRoundChange = async (roundId: string) => {
+    form.setFieldsValue({ lecturerId: undefined })
+    setLecturers([])
+    setLoadingLecturers(true)
+    try {
+      const res = await grpcReportsApi.getWorkload(roundId)
+      const items = res.data.data || []
+      setLecturers(items)
+      const me = items.find(l => l.lecturerName === user?.fullName)
+      if (me) form.setFieldsValue({ lecturerId: me.lecturerId })
+    } catch {
+      message.error('Failed to load lecturers — is the gRPC service running on :5200?')
+    } finally {
+      setLoadingLecturers(false)
+    }
+  }
+
   // FR-11: Submit review feedback
   const handleSubmit = async (values: any) => {
     setSubmitting(true)
@@ -49,7 +71,7 @@ export default function FeedbackPage() {
       const res = await feedbackApi.submit({
         reviewScheduleId: values.reviewScheduleId.trim(),
         groupId: values.groupId.trim(),
-        lecturerId: values.lecturerId.trim(),
+        lecturerId: values.lecturerId,
         comments: values.comments,
         recommendations: values.recommendations,
         evaluationNotes: values.evaluationNotes || '',
@@ -118,13 +140,39 @@ export default function FeedbackPage() {
             </Title>
 
             <Form form={form} layout="vertical" onFinish={handleSubmit} size="middle">
-              <Form.Item name="lecturerId" label="Your Lecturer ID"
-                rules={[
-                  { required: true, message: 'Required' },
-                  { pattern: UUID_PATTERN, message: 'Must be a valid UUID' },
-                ]}
-                help="Your Lecturer record ID — this is not the same as your login account ID">
-                <Input placeholder="e.g. 3fa85f64-5717-4562-b3fc-2c963f66afa5" />
+              <Form.Item name="reviewRoundId" label="Review Round"
+                rules={[{ required: true, message: 'Select a round to load its lecturers' }]}>
+                <Select placeholder="Choose a review round..." onChange={handleRoundChange}>
+                  {rounds.map(r => (
+                    <Option key={r.id} value={r.id}>
+                      <Space>
+                        <span>{r.name}</span>
+                        <Tag color="blue" style={{ fontSize: 10 }}>{r.semester}</Tag>
+                      </Space>
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+
+              <Form.Item name="lecturerId" label="Reviewing Lecturer"
+                rules={[{ required: true, message: 'Required' }]}
+                help="Auto-selected to match your account when your name appears in the round">
+                <Select
+                  placeholder={loadingLecturers ? 'Loading lecturers...' : 'Select the reviewing lecturer'}
+                  loading={loadingLecturers}
+                  disabled={lecturers.length === 0}
+                  notFoundContent="No lecturers assigned to this round"
+                >
+                  {lecturers.map(l => (
+                    <Option key={l.lecturerId} value={l.lecturerId}>
+                      <Space>
+                        <span>{l.lecturerName}</span>
+                        <Tag color="blue" style={{ fontSize: 10 }}>{l.department}</Tag>
+                        <Tag style={{ fontSize: 10 }}>{l.assignedReviews} reviews</Tag>
+                      </Space>
+                    </Option>
+                  ))}
+                </Select>
               </Form.Item>
 
               <Form.Item name="reviewScheduleId" label="Review Schedule ID"

@@ -75,6 +75,11 @@ export interface ReviewReportDto {
   lecturerWorkloads: { lecturerName: string; assignedReviews: number }[]
 }
 
+export interface LecturerWorkloadDto {
+  lecturerId: string; lecturerName: string
+  department: string; assignedReviews: number
+}
+
 export interface GrpcRoundReportDto {
   reviewRoundId: string; reviewRoundName: string
   totalGroups: number; totalLecturers: number; totalSlots: number
