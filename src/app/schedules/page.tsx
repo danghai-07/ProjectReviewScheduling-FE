@@ -11,12 +11,14 @@ import {
 import MainLayout from '@/components/layout/MainLayout'
 import { roundsApi, schedulesApi, roomsApi } from '@/lib/services'
 import { FAP_COLORS, UUID_PATTERN } from '@/lib/constants'
+import { useAuthStore } from '@/stores/authStore'
 import type { ReviewRoundDto, ScheduleSummaryDto, RoomDto } from '@/types'
 
 const { Title, Text } = Typography
 const { Option } = Select
 
 export default function SchedulesPage() {
+  const { user } = useAuthStore()
   const [rounds, setRounds] = useState<ReviewRoundDto[]>([])
   const [selectedRoundId, setSelectedRoundId] = useState<string>('')
   const [rooms, setRooms] = useState<RoomDto[]>([])
@@ -26,6 +28,8 @@ export default function SchedulesPage() {
   const [publishing, setPublishing] = useState(false)
   const [assigning, setAssigning] = useState(false)
   const [assignForm] = Form.useForm()
+
+  const isModerator = user?.role === 'Moderator'
 
   useEffect(() => {
     roundsApi.getAll().then(r => setRounds(r.data.data || []))
@@ -212,8 +216,15 @@ export default function SchedulesPage() {
           <HomeOutlined /> Assign Room to Schedule
         </Title>
         <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
-          Assign a room to a generated review schedule (Moderator only).
+          Assign a room to a generated review schedule.
         </Text>
+
+        {!isModerator && (
+          <Alert type="warning" showIcon
+            message="Only Moderators can assign rooms to schedules."
+            style={{ marginBottom: 12 }} />
+        )}
+
         <Form form={assignForm} layout="inline" onFinish={handleAssignRoom}>
           <Form.Item
             name="reviewScheduleId"
@@ -244,6 +255,7 @@ export default function SchedulesPage() {
           <Button
             type="primary" htmlType="submit"
             icon={<HomeOutlined />} loading={assigning}
+            disabled={!isModerator}
             style={{ background: FAP_COLORS.primary }}
           >
             Assign Room

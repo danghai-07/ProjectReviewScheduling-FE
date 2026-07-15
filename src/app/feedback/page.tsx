@@ -44,13 +44,12 @@ export default function FeedbackPage() {
 
   // FR-11: Submit review feedback
   const handleSubmit = async (values: any) => {
-    if (!user) return message.error('Not authenticated')
     setSubmitting(true)
     try {
       const res = await feedbackApi.submit({
         reviewScheduleId: values.reviewScheduleId.trim(),
         groupId: values.groupId.trim(),
-        lecturerId: user.userId,
+        lecturerId: values.lecturerId.trim(),
         comments: values.comments,
         recommendations: values.recommendations,
         evaluationNotes: values.evaluationNotes || '',
@@ -119,6 +118,15 @@ export default function FeedbackPage() {
             </Title>
 
             <Form form={form} layout="vertical" onFinish={handleSubmit} size="middle">
+              <Form.Item name="lecturerId" label="Your Lecturer ID"
+                rules={[
+                  { required: true, message: 'Required' },
+                  { pattern: UUID_PATTERN, message: 'Must be a valid UUID' },
+                ]}
+                help="Your Lecturer record ID — this is not the same as your login account ID">
+                <Input placeholder="e.g. 3fa85f64-5717-4562-b3fc-2c963f66afa5" />
+              </Form.Item>
+
               <Form.Item name="reviewScheduleId" label="Review Schedule ID"
                 rules={[
                   { required: true, message: 'Required' },
