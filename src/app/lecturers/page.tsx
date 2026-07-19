@@ -1,106 +1,219 @@
 'use client'
 import { useState, useEffect } from 'react'
 import {
-  Table, Button, Select, Space, Tag, Typography,
-  message, Card, Row, Col, Modal, Form, InputNumber, Divider
+  Button, Select, Space, Tag, Typography, message, Alert,
+  Modal, Form, InputNumber, Input, Popconfirm
 } from 'antd'
-import { TeamOutlined, PlusOutlined, MailOutlined } from '@ant-design/icons'
+import {
+  TeamOutlined, PlusOutlined, MailOutlined,
+  CheckOutlined, CloseOutlined,
+} from '@ant-design/icons'
 import MainLayout from '@/components/layout/MainLayout'
 import { roundsApi, lecturersApi } from '@/lib/services'
-import { FAP_COLORS, STATUS_COLORS } from '@/lib/constants'
+import { FAP_COLORS, UUID_PATTERN } from '@/lib/constants'
+import { useAuthStore } from '@/stores/authStore'
 import type { ReviewRoundDto } from '@/types'
 
 const { Text, Title } = Typography
 const { Option } = Select
 
-// Demo lecturer data (normally from a /api/lecturers endpoint — add when ready)
-const DEMO_LECTURERS = [
-  { id: '', fullName: 'Tran Thi Bich', email: 'lecturer1@university.edu', department: 'Software Engineering' },
-  { id: '', fullName: 'Le Van Cuong', email: 'lecturer2@university.edu', department: 'Computer Science' },
-  { id: '', fullName: 'Pham Minh Duc', email: 'lecturer3@university.edu', department: 'Information Systems' },
-  { id: '', fullName: 'Hoang Thi Lan', email: 'lecturer4@university.edu', department: 'Data Science' },
-  { id: '', fullName: 'Nguyen Quoc Hung', email: 'lecturer5@university.edu', department: 'Cybersecurity' },
-]
-
 export default function LecturersPage() {
+  const { user } = useAuthStore()
   const [rounds, setRounds] = useState<ReviewRoundDto[]>([])
-  const [selectedRoundId, setSelectedRoundId] = useState('')
   const [compatOpen, setCompatOpen] = useState(false)
+  const [inviting, setInviting] = useState(false)
+  const [responding, setResponding] = useState(false)
+  const [inviteForm] = Form.useForm()
+  const [respondForm] = Form.useForm()
   const [compatForm] = Form.useForm()
+
+  const isModerator = user?.role === 'Moderator'
+  const isLecturer = user?.role === 'Lecturer'
 
   useEffect(() => {
     roundsApi.getAll().then(r => setRounds(r.data.data || []))
   }, [])
 
-  const handleInvite = async (email: string) => {
-    if (!selectedRoundId) return message.warning('Please select a round first')
-    message.info(`Invitation sent to ${email} (wire to real lecturer ID from /api/lecturers when endpoint is ready)`)
+  // FR-03: Invite lecturer to a review round
+  const handleInvite = async (values: { reviewRoundId: string; lecturerId: string }) => {
+    setInviting(true)
+    try {
+      const res = await lecturersApi.invite(
+        values.reviewRoundId,
+        values.lecturerId.trim()
+      )
+      if (res.data.success) {
+        message.success('Invitation sent!')
+        inviteForm.resetFields(['lecturerId'])
+      } else {
+        message.error(res.data.message)
+      }
+    } catch (err: any) {
+      message.error(err.response?.data?.message || 'Failed to send invitation')
+    } finally {
+      setInviting(false)
+    }
+  }
+
+  // FR-03: Lecturer accept / decline invitation
+  const handleRespond = async (accept: boolean) => {
+    try {
+      await respondForm.validateFields()
+    } catch { return }
+    const invitationId = respondForm.getFieldValue('invitationId').trim()
+    setResponding(true)
+    try {
+      const res = await lecturersApi.respondInvitation(invitationId, accept)
+      if (res.data.success) {
+        message.success(accept ? 'Invitation accepted!' : 'Invitation declined.')
+        respondForm.resetFields()
+      } else {
+        message.error(res.data.message)
+      }
+    } catch (err: any) {
+      message.error(err.response?.data?.message || 'Failed to respond to invitation')
+    } finally {
+      setResponding(false)
+    }
   }
 
   const handleSetCompatibility = async (values: any) => {
     try {
-      await lecturersApi.setCompatibility(
-        values.reviewRoundId, values.lecturerAId, values.lecturerBId, values.score
+      const res = await lecturersApi.setCompatibility(
+        values.reviewRoundId,
+        values.lecturerAId.trim(),
+        values.lecturerBId.trim(),
+        values.score
       )
-      message.success('Compatibility score saved!')
-      setCompatOpen(false)
-      compatForm.resetFields()
-    } catch { message.error('Failed to save compatibility score') }
+      if (res.data.success) {
+        message.success('Compatibility score saved!')
+        setCompatOpen(false)
+        compatForm.resetFields()
+      } else {
+        message.error(res.data.message)
+      }
+    } catch (err: any) {
+      message.error(err.response?.data?.message || 'Failed to save compatibility score')
+    }
   }
-
-  const columns = [
-    { title: '#', key: 'i', width: 40,
-      render: (_: any, __: any, i: number) => <Text type="secondary">{i + 1}</Text> },
-    { title: 'Full Name', dataIndex: 'fullName', key: 'fullName',
-      render: (v: string) => <Text strong>{v}</Text> },
-    { title: 'Email', dataIndex: 'email', key: 'email',
-      render: (v: string) => <Text style={{ fontSize: 12 }}><MailOutlined /> {v}</Text> },
-    { title: 'Department', dataIndex: 'department', key: 'department',
-      render: (v: string) => <Tag color="blue">{v}</Tag> },
-    {
-      title: 'Actions', key: 'actions', width: 120,
-      render: (row: any) => (
-        <Button size="small" type="primary"
-          style={{ background: FAP_COLORS.primary, fontSize: 11 }}
-          onClick={() => handleInvite(row.email)}>
-          Invite
-        </Button>
-      ),
-    },
-  ]
 
   return (
     <MainLayout>
       <div className="page-title-bar">
         <h2><TeamOutlined /> Lecturers</h2>
         <Space>
-          <Select
-            placeholder="Select round to invite..." style={{ width: 220 }}
-            value={selectedRoundId || undefined}
-            onChange={setSelectedRoundId} size="small"
-          >
-            {rounds.map(r => (
-              <Option key={r.id} value={r.id}>{r.name} — {r.semester}</Option>
-            ))}
-          </Select>
+          <Tag color="blue">{user?.role} — {user?.fullName}</Tag>
           <Button size="small" icon={<PlusOutlined />}
+            disabled={!isModerator}
             onClick={() => setCompatOpen(true)}>
             Set Compatibility Score
           </Button>
         </Space>
       </div>
 
+      {/* FR-03: Invite Lecturer */}
       <div className="page-card">
-        {selectedRoundId && (
-          <Tag color="blue" style={{ marginBottom: 12 }}>
-            Inviting to: {rounds.find(r => r.id === selectedRoundId)?.name}
-          </Tag>
+        <Title level={5} style={{ color: FAP_COLORS.primary, marginBottom: 4 }}>
+          <MailOutlined /> Invite Lecturer to Round
+        </Title>
+        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+          Enter the Lecturer entity ID (from database / Swagger). No GET /api/lecturers endpoint yet.
+        </Text>
+
+        {!isModerator && (
+          <Alert type="warning" showIcon
+            message="Only Moderators can invite lecturers."
+            style={{ marginBottom: 12 }} />
         )}
-        <Table
-          dataSource={DEMO_LECTURERS} columns={columns}
-          rowKey="email" size="small"
-          pagination={false}
-        />
+
+        <Form form={inviteForm} layout="inline" onFinish={handleInvite}>
+          <Form.Item
+            name="reviewRoundId"
+            rules={[{ required: true, message: 'Select a round' }]}
+          >
+            <Select placeholder="Select review round..." style={{ width: 240 }}>
+              {rounds.map(r => (
+                <Option key={r.id} value={r.id}>
+                  {r.name} — {r.semester}
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+          <Form.Item
+            name="lecturerId"
+            rules={[
+              { required: true, message: 'Lecturer ID is required' },
+              { pattern: UUID_PATTERN, message: 'Must be a valid UUID' },
+            ]}
+            style={{ flex: 1, minWidth: 320 }}
+          >
+            <Input placeholder="Lecturer ID (UUID)" />
+          </Form.Item>
+          <Button
+            type="primary" htmlType="submit"
+            icon={<MailOutlined />} loading={inviting}
+            disabled={!isModerator}
+            style={{ background: FAP_COLORS.primary }}
+          >
+            Send Invitation
+          </Button>
+        </Form>
+      </div>
+
+      {/* FR-03: Respond to Invitation */}
+      <div className="page-card">
+        <Title level={5} style={{ color: FAP_COLORS.primary, marginBottom: 4 }}>
+          <CheckOutlined /> Respond to Invitation
+        </Title>
+        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+          Enter the Invitation ID from the database. No GET invitations endpoint yet.
+        </Text>
+
+        {!isLecturer && (
+          <Alert type="warning" showIcon
+            message="Only Lecturers can accept or decline invitations."
+            style={{ marginBottom: 12 }} />
+        )}
+
+        <Form form={respondForm} layout="inline">
+          <Form.Item
+            name="invitationId"
+            rules={[
+              { required: true, message: 'Invitation ID is required' },
+              { pattern: UUID_PATTERN, message: 'Must be a valid UUID' },
+            ]}
+            style={{ flex: 1, minWidth: 320 }}
+          >
+            <Input placeholder="Invitation ID (UUID)" />
+          </Form.Item>
+          <Space>
+            <Popconfirm
+              title="Accept invitation?"
+              onConfirm={() => handleRespond(true)}
+              okButtonProps={{ style: { background: FAP_COLORS.primary } }}
+            >
+              <Button
+                icon={<CheckOutlined />} loading={responding}
+                disabled={!isLecturer}
+                style={{ borderColor: FAP_COLORS.success, color: FAP_COLORS.success }}
+              >
+                Accept
+              </Button>
+            </Popconfirm>
+            <Popconfirm
+              title="Decline invitation?"
+              onConfirm={() => handleRespond(false)}
+              okButtonProps={{ danger: true }}
+            >
+              <Button
+                danger icon={<CloseOutlined />} loading={responding}
+                disabled={!isLecturer}
+              >
+                Decline
+              </Button>
+            </Popconfirm>
+          </Space>
+        </Form>
       </div>
 
       {/* Compatibility Score Modal */}
@@ -118,15 +231,23 @@ export default function LecturersPage() {
               {rounds.map(r => <Option key={r.id} value={r.id}>{r.name}</Option>)}
             </Select>
           </Form.Item>
-          <Form.Item name="lecturerAId" label="Lecturer A ID" rules={[{ required: true }]}>
-            <Select placeholder="Lecturer A UUID">
-              {DEMO_LECTURERS.map(l => <Option key={l.email} value={l.email}>{l.fullName}</Option>)}
-            </Select>
+          <Form.Item
+            name="lecturerAId" label="Lecturer A ID"
+            rules={[
+              { required: true, message: 'Required' },
+              { pattern: UUID_PATTERN, message: 'Must be a valid UUID' },
+            ]}
+          >
+            <Input placeholder="Lecturer A UUID" />
           </Form.Item>
-          <Form.Item name="lecturerBId" label="Lecturer B ID" rules={[{ required: true }]}>
-            <Select placeholder="Lecturer B UUID">
-              {DEMO_LECTURERS.map(l => <Option key={l.email} value={l.email}>{l.fullName}</Option>)}
-            </Select>
+          <Form.Item
+            name="lecturerBId" label="Lecturer B ID"
+            rules={[
+              { required: true, message: 'Required' },
+              { pattern: UUID_PATTERN, message: 'Must be a valid UUID' },
+            ]}
+          >
+            <Input placeholder="Lecturer B UUID" />
           </Form.Item>
           <Form.Item name="score" label="Compatibility Score (0–10)"
             initialValue={5} rules={[{ required: true }]}>

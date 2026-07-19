@@ -1,12 +1,12 @@
 'use client'
 import { useEffect, useState } from 'react'
 import {
-  Select, Button, Card, Row, Col, Statistic, Table, Tag, Space,
-  Typography, message, Spin, Popconfirm, Alert, Badge, Modal, Form, Input
+  Select, Button, Card, Row, Col, Statistic, Tag, Space,
+  Typography, message, Popconfirm, Alert, Badge, Form, Input
 } from 'antd'
 import {
-  ThunderboltOutlined, SendOutlined, CheckCircleOutlined,
-  ScheduleOutlined, HomeOutlined,
+  ThunderboltOutlined, SendOutlined,
+  ScheduleOutlined, HomeOutlined, SwapOutlined, TeamOutlined,
 } from '@ant-design/icons'
 import MainLayout from '@/components/layout/MainLayout'
 import { roundsApi, schedulesApi, roomsApi } from '@/lib/services'
@@ -23,11 +23,14 @@ export default function SchedulesPage() {
   const [selectedRoundId, setSelectedRoundId] = useState<string>('')
   const [rooms, setRooms] = useState<RoomDto[]>([])
   const [summary, setSummary] = useState<ScheduleSummaryDto | null>(null)
-  const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [assigning, setAssigning] = useState(false)
+  const [reassigningGroup, setReassigningGroup] = useState(false)
+  const [reassigningLecturer, setReassigningLecturer] = useState(false)
   const [assignForm] = Form.useForm()
+  const [reassignGroupForm] = Form.useForm()
+  const [reassignLecturerForm] = Form.useForm()
 
   const isModerator = user?.role === 'Moderator'
 
@@ -83,6 +86,50 @@ export default function SchedulesPage() {
     } catch (err: any) {
       message.error(err.response?.data?.message || 'Failed to assign room')
     } finally { setAssigning(false) }
+  }
+
+  // FR-07: Manually reassign a group to another schedule
+  const handleReassignGroup = async (values: {
+    reviewScheduleId: string; groupId: string; newScheduleId: string
+  }) => {
+    setReassigningGroup(true)
+    try {
+      const res = await schedulesApi.reassignGroup(
+        values.reviewScheduleId.trim(),
+        values.groupId.trim(),
+        values.newScheduleId.trim()
+      )
+      if (res.data.success) {
+        message.success('Group reassigned successfully!')
+        reassignGroupForm.resetFields()
+      } else {
+        message.error(res.data.message)
+      }
+    } catch (err: any) {
+      message.error(err.response?.data?.message || 'Failed to reassign group')
+    } finally { setReassigningGroup(false) }
+  }
+
+  // FR-07: Manually reassign a lecturer to another schedule
+  const handleReassignLecturer = async (values: {
+    reviewScheduleId: string; lecturerId: string; newScheduleId: string
+  }) => {
+    setReassigningLecturer(true)
+    try {
+      const res = await schedulesApi.reassignLecturer(
+        values.reviewScheduleId.trim(),
+        values.lecturerId.trim(),
+        values.newScheduleId.trim()
+      )
+      if (res.data.success) {
+        message.success('Lecturer reassigned successfully!')
+        reassignLecturerForm.resetFields()
+      } else {
+        message.error(res.data.message)
+      }
+    } catch (err: any) {
+      message.error(err.response?.data?.message || 'Failed to reassign lecturer')
+    } finally { setReassigningLecturer(false) }
   }
 
   return (
@@ -259,6 +306,116 @@ export default function SchedulesPage() {
             style={{ background: FAP_COLORS.primary }}
           >
             Assign Room
+          </Button>
+        </Form>
+      </div>
+
+      {/* FR-07: Reassign Group */}
+      <div className="page-card">
+        <Title level={5} style={{ color: FAP_COLORS.primary, marginBottom: 4 }}>
+          <SwapOutlined /> Reassign Group (Manual Adjustment)
+        </Title>
+        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+          Move a group from its current schedule to a different schedule. Group must have availability for the target slot.
+        </Text>
+
+        {!isModerator && (
+          <Alert type="warning" showIcon
+            message="Only Moderators can reassign groups."
+            style={{ marginBottom: 12 }} />
+        )}
+
+        <Form form={reassignGroupForm} layout="vertical" onFinish={handleReassignGroup}
+          style={{ maxWidth: 720 }}>
+          <Form.Item
+            name="reviewScheduleId" label="Source Schedule ID"
+            rules={[
+              { required: true, message: 'Required' },
+              { pattern: UUID_PATTERN, message: 'Must be a valid UUID' },
+            ]}
+          >
+            <Input placeholder="Current Review Schedule ID (UUID)" />
+          </Form.Item>
+          <Form.Item
+            name="groupId" label="Group ID"
+            rules={[
+              { required: true, message: 'Required' },
+              { pattern: UUID_PATTERN, message: 'Must be a valid UUID' },
+            ]}
+          >
+            <Input placeholder="Project Group ID (UUID)" />
+          </Form.Item>
+          <Form.Item
+            name="newScheduleId" label="Target Schedule ID"
+            rules={[
+              { required: true, message: 'Required' },
+              { pattern: UUID_PATTERN, message: 'Must be a valid UUID' },
+            ]}
+          >
+            <Input placeholder="New Review Schedule ID (UUID)" />
+          </Form.Item>
+          <Button
+            type="primary" htmlType="submit"
+            icon={<SwapOutlined />} loading={reassigningGroup}
+            disabled={!isModerator}
+            style={{ background: FAP_COLORS.primary }}
+          >
+            Reassign Group
+          </Button>
+        </Form>
+      </div>
+
+      {/* FR-07: Reassign Lecturer */}
+      <div className="page-card">
+        <Title level={5} style={{ color: FAP_COLORS.primary, marginBottom: 4 }}>
+          <TeamOutlined /> Reassign Lecturer (Manual Adjustment)
+        </Title>
+        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+          Move a lecturer from its current schedule to a different schedule. Lecturer must have availability and must not supervise groups on the target schedule.
+        </Text>
+
+        {!isModerator && (
+          <Alert type="warning" showIcon
+            message="Only Moderators can reassign lecturers."
+            style={{ marginBottom: 12 }} />
+        )}
+
+        <Form form={reassignLecturerForm} layout="vertical" onFinish={handleReassignLecturer}
+          style={{ maxWidth: 720 }}>
+          <Form.Item
+            name="reviewScheduleId" label="Source Schedule ID"
+            rules={[
+              { required: true, message: 'Required' },
+              { pattern: UUID_PATTERN, message: 'Must be a valid UUID' },
+            ]}
+          >
+            <Input placeholder="Current Review Schedule ID (UUID)" />
+          </Form.Item>
+          <Form.Item
+            name="lecturerId" label="Lecturer ID"
+            rules={[
+              { required: true, message: 'Required' },
+              { pattern: UUID_PATTERN, message: 'Must be a valid UUID' },
+            ]}
+          >
+            <Input placeholder="Lecturer ID (UUID)" />
+          </Form.Item>
+          <Form.Item
+            name="newScheduleId" label="Target Schedule ID"
+            rules={[
+              { required: true, message: 'Required' },
+              { pattern: UUID_PATTERN, message: 'Must be a valid UUID' },
+            ]}
+          >
+            <Input placeholder="New Review Schedule ID (UUID)" />
+          </Form.Item>
+          <Button
+            type="primary" htmlType="submit"
+            icon={<TeamOutlined />} loading={reassigningLecturer}
+            disabled={!isModerator}
+            style={{ background: FAP_COLORS.primary }}
+          >
+            Reassign Lecturer
           </Button>
         </Form>
       </div>
