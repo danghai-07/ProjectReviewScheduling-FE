@@ -2,12 +2,12 @@
 import { useEffect, useState } from 'react'
 import {
   Select, Button, Card, Checkbox, Table, Tag, Typography,
-  message, Spin, Alert, Space, Row, Col, Divider, Steps
+  message, Spin, Alert, Space, Row, Col, Steps, Input, Form
 } from 'antd'
 import { ClockCircleOutlined, CheckCircleOutlined, CalendarOutlined } from '@ant-design/icons'
 import MainLayout from '@/components/layout/MainLayout'
 import { roundsApi, lecturersApi, groupsApi } from '@/lib/services'
-import { FAP_COLORS } from '@/lib/constants'
+import { FAP_COLORS, UUID_PATTERN } from '@/lib/constants'
 import { useAuthStore } from '@/stores/authStore'
 import type { ReviewRoundDto, ReviewSlotDto } from '@/types'
 import dayjs from 'dayjs'
@@ -21,12 +21,14 @@ export default function AvailabilityPage() {
   const [selectedRoundId, setSelectedRoundId] = useState('')
   const [slots, setSlots] = useState<ReviewSlotDto[]>([])
   const [selectedSlotIds, setSelectedSlotIds] = useState<string[]>([])
+  const [entityId, setEntityId] = useState('')
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
 
   const isLecturer = user?.role === 'Lecturer'
   const isStudent = user?.role === 'Student'
+  const canSubmit = isLecturer || isStudent
 
   useEffect(() => {
     roundsApi.getAll().then(r => {
@@ -52,19 +54,41 @@ export default function AvailabilityPage() {
   const handleSubmit = async () => {
     if (!selectedRoundId) return message.warning('Please select a review round')
     if (selectedSlotIds.length === 0) return message.warning('Please select at least one slot')
-    if (!user) return message.error('Not authenticated')
+    if (!entityId.trim()) {
+      return message.warning(
+        isLecturer
+          ? 'Please enter your Lecturer ID (UUID)'
+          : 'Please enter your Group ID (UUID)'
+      )
+    }
+    if (!UUID_PATTERN.test(entityId.trim())) {
+      return message.error('ID must be a valid UUID')
+    }
+    if (!canSubmit) return message.error('Only Lecturers and Students can register availability')
 
     setSubmitting(true)
     try {
       if (isLecturer) {
-        await lecturersApi.registerAvailability(user.userId, selectedRoundId, selectedSlotIds)
-        message.success(`Availability registered for ${selectedSlotIds.length} slot(s)!`)
+        const res = await lecturersApi.registerAvailability(
+          entityId.trim(), selectedRoundId, selectedSlotIds
+        )
+        if (res.data.success) {
+          message.success(`Availability registered for ${selectedSlotIds.length} slot(s)!`)
+          setSubmitted(true)
+        } else {
+          message.error(res.data.message)
+        }
       } else if (isStudent) {
-        // groupId would come from user profile — using userId as placeholder
-        await groupsApi.registerAvailability(user.userId, selectedRoundId, selectedSlotIds)
-        message.success(`Group availability registered for ${selectedSlotIds.length} slot(s)!`)
+        const res = await groupsApi.registerAvailability(
+          entityId.trim(), selectedRoundId, selectedSlotIds
+        )
+        if (res.data.success) {
+          message.success(`Group availability registered for ${selectedSlotIds.length} slot(s)!`)
+          setSubmitted(true)
+        } else {
+          message.error(res.data.message)
+        }
       }
-      setSubmitted(true)
     } catch (err: any) {
       message.error(err.response?.data?.message || 'Failed to register availability')
     } finally {
@@ -72,7 +96,6 @@ export default function AvailabilityPage() {
     }
   }
 
-  // Group slots by date for better display
   const slotsByDate = slots.reduce((acc, slot) => {
     const date = dayjs(slot.date).format('YYYY-MM-DD')
     if (!acc[date]) acc[date] = []
@@ -122,25 +145,29 @@ export default function AvailabilityPage() {
     <MainLayout>
       <div className="page-title-bar">
         <h2><CalendarOutlined /> Register Availability</h2>
-        <Tag color={isLecturer ? 'blue' : 'green'} style={{ fontSize: 12 }}>
+        <Tag color={isLecturer ? 'blue' : isStudent ? 'green' : 'default'} style={{ fontSize: 12 }}>
           {user?.role} — {user?.fullName}
         </Tag>
       </div>
 
-      {/* Steps guide */}
+      {!canSubmit && (
+        <Alert type="warning" showIcon style={{ marginBottom: 16 }}
+          message="Only Lecturers and Students can register availability." />
+      )}
+
       <div className="page-card">
         <Steps
           size="small"
-          current={!selectedRoundId ? 0 : submitted ? 2 : 1}
+          current={!selectedRoundId ? 0 : submitted ? 3 : selectedSlotIds.length > 0 ? 2 : 1}
           items={[
             { title: 'Select Round', description: 'Pick an open round' },
-            { title: 'Pick Slots', description: 'Choose your available times' },
+            { title: 'Pick Slots', description: 'Choose available times' },
+            { title: 'Enter ID', description: isLecturer ? 'Lecturer UUID' : 'Group UUID' },
             { title: 'Submit', description: 'Confirm registration' },
           ]}
         />
       </div>
 
-      {/* Round selector */}
       <div className="page-card">
         <Title level={5} style={{ color: FAP_COLORS.primary, marginBottom: 12 }}>
           1. Select Review Round
@@ -168,7 +195,6 @@ export default function AvailabilityPage() {
         )}
       </div>
 
-      {/* Slot picker */}
       {selectedRoundId && (
         <div className="page-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -225,21 +251,46 @@ export default function AvailabilityPage() {
         </div>
       )}
 
-      {/* Submit */}
       {selectedRoundId && slots.length > 0 && !submitted && (
         <div className="page-card">
           <Title level={5} style={{ color: FAP_COLORS.primary, marginBottom: 12 }}>
-            3. Confirm Registration
+            3. Enter {isLecturer ? 'Lecturer' : 'Group'} ID &amp; Confirm
           </Title>
           <Alert
             type="info" showIcon
             style={{ marginBottom: 12 }}
-            message={`You have selected ${selectedSlotIds.length} slot(s). Click Submit to register.`}
+            message={
+              isLecturer
+                ? 'Enter your Lecturer entity ID (not User ID). You must have accepted the invitation first.'
+                : 'Enter your Project Group ID (not User ID). Get it from the database / Swagger.'
+            }
+          />
+          <Form layout="vertical" style={{ maxWidth: 480, marginBottom: 16 }}>
+            <Form.Item
+              label={isLecturer ? 'Lecturer ID' : 'Group ID'}
+              required
+              help="Must be a valid UUID from the database"
+            >
+              <Input
+                value={entityId}
+                onChange={e => setEntityId(e.target.value)}
+                placeholder={
+                  isLecturer
+                    ? 'Lecturer ID (UUID)'
+                    : 'Group ID (UUID)'
+                }
+              />
+            </Form.Item>
+          </Form>
+          <Alert
+            type="info" showIcon
+            style={{ marginBottom: 12 }}
+            message={`You have selected ${selectedSlotIds.length} slot(s).`}
           />
           <Button
             type="primary" size="large"
             loading={submitting}
-            disabled={selectedSlotIds.length === 0}
+            disabled={selectedSlotIds.length === 0 || !canSubmit}
             onClick={handleSubmit}
             style={{ background: FAP_COLORS.primary }}
             icon={<CheckCircleOutlined />}
@@ -249,7 +300,6 @@ export default function AvailabilityPage() {
         </div>
       )}
 
-      {/* Success */}
       {submitted && (
         <div className="page-card">
           <Alert

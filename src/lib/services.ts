@@ -66,6 +66,10 @@ export const schedulesApi = {
     api.post<ApiResponse<boolean>>('/api/schedules/reassign-group', {
       reviewScheduleId, groupId, newScheduleId
     }),
+  reassignLecturer: (reviewScheduleId: string, lecturerId: string, newScheduleId: string) =>
+    api.post<ApiResponse<boolean>>('/api/schedules/reassign-lecturer', {
+      reviewScheduleId, lecturerId, newScheduleId
+    }),
 }
 
 // ─── Feedback ──────────────────────────────────────────────────────────────
