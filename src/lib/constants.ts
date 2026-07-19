@@ -24,5 +24,7 @@ export const STATUS_COLORS: Record<string, string> = {
   Declined: 'red',
 }
 
+export const UUID_PATTERN = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
+
 export const ROLES = ['Moderator', 'Lecturer', 'Student']
 export const SEMESTERS = ['HK1_2024', 'HK2_2024', 'HK1_2025', 'HK2_2025', 'HK1_2026']
