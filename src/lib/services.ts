@@ -5,6 +5,7 @@ import type {
   ReviewSlotDto, CreateSlotPayload,
   ScheduleSummaryDto, RoomDto, ReviewReportDto, GrpcRoundReportDto,
   SubmitFeedbackPayload, LecturerWorkloadDto,
+  SystemEventDto, JobRunResultDto, SystemStatusDto,
   ApiResponse
 } from '@/types'
 
@@ -89,6 +90,16 @@ export const roomsApi = {
 export const reportsApi = {
   getReport: (reviewRoundId: string) =>
     api.get<ApiResponse<ReviewReportDto>>(`/api/reports/${reviewRoundId}`),
+}
+
+// ─── System / Monitoring ────────────────────────────────────────────────────
+export const systemApi = {
+  getEvents: (count = 100) =>
+    api.get<ApiResponse<SystemEventDto[]>>(`/api/system/events?count=${count}`),
+  getStatus: () =>
+    api.get<ApiResponse<SystemStatusDto>>('/api/system/status'),
+  triggerJob: () =>
+    api.post<ApiResponse<JobRunResultDto>>('/api/system/trigger-job'),
 }
 
 // ─── gRPC Reports ──────────────────────────────────────────────────────────

@@ -86,6 +86,22 @@ export interface GrpcRoundReportDto {
   scheduledGroups: number; schedulingSuccessRate: number; slotUtilizationRate: number
 }
 
+// ─── System / Monitoring ────────────────────────────────────────────────────
+export interface SystemEventDto {
+  timestamp: string; source: string; channel: string; message: string
+}
+
+export interface JobRunResultDto {
+  schedulesProcessed: number; remindersSent: number
+  staleCleaned: number; ranAt: string
+}
+
+export interface SystemStatusDto {
+  redisConnected: boolean
+  lastJobRun: JobRunResultDto | null
+  eventCount: number
+}
+
 // ─── API Wrapper ───────────────────────────────────────────────────────────
 export interface ApiResponse<T> {
   success: boolean; message: string; data: T; errors: string[]

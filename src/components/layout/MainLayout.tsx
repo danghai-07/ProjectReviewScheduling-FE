@@ -7,7 +7,7 @@ import {
   BookOutlined, HomeOutlined, BarChartOutlined,
   UserOutlined, LogoutOutlined, BellOutlined,
   ScheduleOutlined, ApiOutlined, SettingOutlined,
-  ClockCircleOutlined, CommentOutlined,
+  ClockCircleOutlined, CommentOutlined, MonitorOutlined,
 } from '@ant-design/icons'
 import { useAuthStore } from '@/stores/authStore'
 
@@ -25,6 +25,7 @@ const menuItems = [
   { key: '/feedback', icon: <CommentOutlined />, label: 'Feedback' },
   { key: '/reports', icon: <BarChartOutlined />, label: 'Reports' },
   { key: '/grpc-reports', icon: <ApiOutlined />, label: 'gRPC Reports' },
+  { key: '/monitoring', icon: <MonitorOutlined />, label: 'Monitoring' },
 ]
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
